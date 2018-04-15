@@ -53,9 +53,11 @@ public class Lighting : MonoBehaviour {
             triangles[triIndex + 2] = i + 1;
             triIndex += 3;
         }
+        //画出最后一个三角形
         triangles[triIndex] = 0;
         triangles[triIndex + 1] = triangles.Length / 3;
         triangles[triIndex + 2] = 1;
+        
         for (int j = 0; j < uvs.Length; j++)
             uvs[j] = new Vector2(verts[j].x, verts[j].z);
 
