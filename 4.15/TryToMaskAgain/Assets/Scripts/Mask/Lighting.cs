@@ -12,7 +12,6 @@ public class Lighting : MonoBehaviour {
     private Mesh newmesh;
     private Vector3 direction;
     private Vector3[] verts;
-    private Vector2[] uvs;
     private int[] triangles;
 	
 	void Start () {
@@ -20,7 +19,6 @@ public class Lighting : MonoBehaviour {
         mask.GetComponent<MeshFilter>().mesh = newmesh;
         verts = new Vector3[360 / interval + 1];
         triangles = new int[3 * 360 / interval];
-        uvs = new Vector2[verts.Length];
 	}
 
 	void Update () {
@@ -58,13 +56,9 @@ public class Lighting : MonoBehaviour {
         triangles[triIndex + 1] = triangles.Length / 3;
         triangles[triIndex + 2] = 1;
         
-        for (int j = 0; j < uvs.Length; j++)
-            uvs[j] = new Vector2(verts[j].x, verts[j].z);
-
         newmesh.Clear();
         newmesh.vertices = verts;
         newmesh.triangles = triangles;
-        newmesh.uv = uvs;
         newmesh.RecalculateNormals();
     }
 }

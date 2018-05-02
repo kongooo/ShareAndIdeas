@@ -51,9 +51,11 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-     <Compile Include="Assets\Scripts\Lighting.cs" />
-     <Compile Include="Assets\Scripts\Move.cs" />
-     <None Include="Assets\Shader\MaskShader.shader" />
+     <Compile Include="Assets\Scripts\LowPoly\GenerateLowPoly.cs" />
+     <Compile Include="Assets\Scripts\Mask\Lighting.cs" />
+     <Compile Include="Assets\Scripts\Mask\Move.cs" />
+     <None Include="Assets\Shader\Mask\MaskShader.shader" />
+     <None Include="Assets\Shader\LowPoly\LowPoly.shader" />
  <Reference Include="UnityEditor.StandardEvents">
  <HintPath>C:/ShareAndIdeas/4.15/TryToMaskAgain/Library/ScriptAssemblies/UnityEditor.StandardEvents.dll</HintPath>
  </Reference>

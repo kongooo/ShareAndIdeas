@@ -1,0 +1,194 @@
+# Linux ELF文件
+
+## 作用
+
+用于定义不同类型的对象文件(Object files)中都放了什么东西、以及都以什么样的格式去放这些东西 
+
+## 类型
+
+* **可重定位的对象文件**：由汇编器汇编生成的.o文件
+* **可执行的对象文件**：可执行应用程序
+* **可被共享的对象文件**：动态库文件，即.so文件
+
+## 格式
+
+![](http://p5bpzbkxa.bkt.clouddn.com/elf%E6%96%87%E4%BB%B6%E6%A0%BC%E5%BC%8F%E3%80%82.png)
+
+注：
+
+* **除了ELF头部表之外，其它节区和段都没有规定的顺序**
+* 右半图是以程序执行视图来看的，编译器在生成目标文件时，通常使用从0开始的相对地址，而在链接过程中，链接器从一个指定的地址开始，根据输入目标文件的顺序，以段（segment）为单位将它们拼装起来。其中每个段可以包括很多个节 
+
+### **ELF header**
+
+描述整个文件的组织，节区部分包含链接视图的大量信息：指令、数据、符号表、重定位信息等
+
+```c
+typedef uint32_t        Elf32_Addr;//无符号程序地址
+typedef uint16_t        Elf32_Half;//无符号中等大小整数
+typedef uint32_t        Elf32_Off;//无符号文件偏移
+typedef int32_t         Elf32_Sword;//有符号大整数
+typedef uint32_t        Elf32_Word;//无符号大整数
+
+#define EI_NIDENT       16      //!< Size of e_ident[].
+
+typedef struct
+{
+unsigned char e_ident[EI_NIDENT];     /* Magic number and other info */
+Elf64_Half    e_type;                 /* Object file type */
+Elf64_Half    e_machine;              /* Architecture */
+Elf64_Word    e_version;              /* Object file version */
+Elf64_Addr    e_entry;                /* Entry point virtual address */
+Elf64_Off     e_phoff;                /* Program header table file offset */
+Elf64_Off     e_shoff;                /* Section header table file offset */
+Elf64_Word    e_flags;                /* Processor-specific flags */
+Elf64_Half    e_ehsize;               /* ELF header size in bytes */
+Elf64_Half    e_phentsize;            /* Program header table entry size */
+Elf64_Half    e_phnum;                /* Program header table entry count */
+Elf64_Half    e_shentsize;            /* Section header table entry size */
+Elf64_Half    e_shnum;                /* Section header table entry count */
+Elf64_Half    e_shstrndx;             /* Section header string table index */
+} Elf64_Ehdr;
+```
+
+* ident：给出如何解释文件的提示信息，这些信息独立于处理器，也独立于文件中的其余内容，包含用一表示ELF文件的字符，以及其他一些与机器无关的信息，开头的4个字节值固定不变，为0x7f和ELF三个字符，标志此文件是一个ELF文件
+* entry：程序的入口虚拟地址，如果目标文件没有程序入口，可以为0
+* flags：保存与文件相关的，特定于处理器的标志。标志名称采用 EF_machine_flag的格式
+* shstrndx：节区头部表格中与节区名称字符串表相关的表项的索引。如果文件没有节区名称字符串表，此参数可以为 SHN_UNDEF。 
+
+### **Section header table**
+
+节区表是用来描述各节区的，包括各节区的名字、大小、类型、虚拟内存中的位置、相对文件头的位置等，所有节区都可通过节区表描述，这样连接器就可以根据文件头部表和节区表的描述信息对各种输入的可重定位文件进行合适的链接，包括节区的合并与重组、符号的重定位（确认符号在虚拟内存中的地址）等，把各个可重定向输入文件链接成一个可执行文件（或者是可共享文件）。如果可执行文件中使用了动态连接库，那么将包含一些用于动态符号链接的节区。
+
+**注：节区头部表只对可重定向文件有用**
+
+```c
+typedef struct
+{
+Elf32_Word    sh_name;                /* Section name (string tbl index) */
+Elf32_Word    sh_type;                /* Section type */
+Elf32_Word    sh_flags;               /* Section flags */
+Elf32_Addr    sh_addr;                /* Section virtual addr at execution */
+Elf32_Off     sh_offset;              /* Section file offset */
+Elf32_Word    sh_size;                /* Section size in bytes */
+Elf32_Word    sh_link;                /* Link to another section */
+Elf32_Word    sh_info;                /* Additional section information */
+Elf32_Word    sh_addralign;           /* Section alignment */
+Elf32_Word    sh_entsize;             /* Entry size if section holds table */
+} Elf32_Shdr; 
+```
+
+* name：是节区头部字符串表节区（Section Header String Table Section）的索引。名字是一个 NULL 结尾的字符串。
+* addr：如果节区将出现在进程的内存映像中，此成员给出节区的第一个字节应处的位置。否则，此字段为0
+* offset：SHT_NOBITS 类型的节区不占用文件的空间，因此其 sh_offset 成员给出的是其概念性的偏移。
+* size：类型为SHT_NOBITS 的节区长度可能非零，不过却不占用文件中的空间。
+* link：记录SHT中的索引链接，意味着从这个字段出发，可以找到对应的另外两个section，具体解释依不同的section而不同
+* addralign：地址对齐要求。例如，如果一个节区保存一个doubleword，那么系统必须保证整个节区能够按双字对齐。sh_addr对 sh_addralign 取模，结果必须为 0。目前仅允许取值为 0 和 2的幂次数。数值 0 和 1 表示节区没有对齐约束。
+* entsize：某些节区中包含固定大小的项目，如符号表。对于这类节区，此成员给出每个表项的长度字节数。 如果节区中并不包含固定长度表项的表格，此成员取值为 0。
+
+###**Program header table**
+
+告诉系统如何创建进程映像，用来构造进程映像的目标文件必须具有程序头部表，只对可执行文件和共享文件有用，一个段可以包括多个节区
+
+```c
+typedef struct
+{
+Elf32_Word    p_type;                 /* Segment type */
+Elf32_Off     p_offset;               /* Segment file offset */
+Elf32_Addr    p_vaddr;                /* Segment virtual address */
+Elf32_Addr    p_paddr;                /* Segment physical address */
+Elf32_Word    p_filesz;               /* Segment size in file */
+Elf32_Word    p_memsz;                /* Segment size in memory */
+Elf32_Word    p_flags;                /* Segment flags */
+Elf32_Word    p_align;                /* Segment alignment */
+} Elf32_Phdr;
+```
+
+### **Section**
+
+包含目标文件中除去ELF 头部、程序头部表格、节区头部表格的所有信息，满足以下条件：
+
+1. 目标文件中的每个节区都有对应的节区头部描述它，反过来，有节区头部不意味着有节区。 
+2. 每个节区占用文件中一个连续字节区域（这个区域可能长度为 0） 
+3. 文件中的节区不能重叠，不允许一个字节存在于两个节区中的情况发生。 
+4. 目标文件中可能包含非活动空间（INACTIVE SPACE）。这些区域不属于任何 头部和节区，其内容未指定。
+
+#### Section Type
+
+![](http://p5bpzbkxa.bkt.clouddn.com/%E8%8A%82%E5%8C%BA%E7%B1%BB%E5%9E%8B.png)
+
+![](http://p5bpzbkxa.bkt.clouddn.com/%E8%8A%82%E5%8C%BA%E7%B1%BB%E5%9E%8B2.png)
+
+#### Section flags 
+
+
+
+#### Special Section
+
+##### Program
+
+* .text：程序的可执行指令
+* .init：包含了可执行指令，是进程初始化代码的一部分。当程序开始执行时，系统要在 开始调用主程序入口之前（通常指C语言的main 函数）执行这些代码 
+
+##### data
+
+* .data/.datal：已初始化变量
+* .bbs：未初始化变量，size为0
+* .rotate/.rodatal：只读数据，常量字符串
+
+注：函数内部的临时变量位于stack上，不在此列，这里的数据都是全局数据
+
+##### 定义符号和引用符号的信息
+
+* .symtab/.dynsym：符号表，对外宣布自己需要引用哪些符号，让linker帮忙解析，看是否有其他模块定义该符号
+* .strtab/.dynstr：字符串信息
+* .dynstr：区包含用于动态链接的字符串，大多数情况下这些字符串代表了与符号表项相关的名称。  
+
+##### relocation information
+
+* .rel：重定位条目，把若干个relocatable object file（当然还要有库文件）组织成一个可以被加载的image并分配正确的地址给各个符号 
+
+##### 内嵌目标平台相关信息
+
+##**String Table**
+
+注：
+
+* 字符串表本身就是一个节区，在elf文件头部结构中存在一个成员e_shstrndx给出这个节区头部表项的索引位置
+* 字符串表节区包含以 NULL（ASCII 码 0）结尾的字符序列，通常称为字符串。ELF目标文件通常使用字符串来表示符号和节区名称。对字符串的引用通常以字符串在字符串表中的下标给出。
+* 一般，第一个字节（索引为 0）定义为一个空字符串。类似的，字符串表的最后一个字节也定义为 NULL，以确保所有的字符串都以 NULL 结尾。索引为 0 的字符串在不同的上下文中可以表示无名或者名字为 NULL 的字符串。
+* 允许存在空的字符串表节区，其节区头部的 sh_size 成员应该为 0。对空的字符串表而言，非 0 的索引值是非法的。
+
+![](http://p5bpzbkxa.bkt.clouddn.com/string%20table.png)
+
+### **Symbol Table**
+
+目标文件的符号表中包含用来定位、重定位程序中符号定义和引用的信息。符号表 索引是对此数组的索引。索引 0 表示表中的第一表项，同时也作为未定义符号的索引。 符号表是由一个个符号元素组成，每个元素的数据结构如下定义：
+
+> typedef struct
+> {
+> Elf32_Word    st_name;                /* Symbol name (string tbl index) */
+> Elf32_Addr    st_value;               /* Symbol value */
+> Elf32_Word    st_size;                /* Symbol size */
+> unsigned char st_info;                /* Symbol type and binding */
+> unsigned char st_other;               /* Symbol visibility */
+> Elf32_Section st_shndx;               /* Section index */
+> } Elf32_Sym;
+
+#### st_info
+
+
+
+## ELF文件格式分析命令
+
+# 参考资料
+
+* [readelf elf文件格式分析](http://linuxtools-rst.readthedocs.io/zh_CN/latest/tool/readelf.html)
+* [Intel平台下Linux中ELF文件动态链接的加载、解析及实例分析（一） ](https://www.ibm.com/developerworks/cn/linux/l-elf/part1/index.html)
+* [打造史上最小的可执行ELF文件](https://www.kancloud.cn/kancloud/cbook/69003)
+* [可执行文件（ELF）格式的理解](https://www.cnblogs.com/xmphoenix/archive/2011/10/23/2221879.html)
+* [elf.h Source File](http://www.openvirtualization.org/documentation/elf_8h_source.html)
+* [计算机科学基础知识（二）:Relocatable Object File](http://www.wowotech.net/basic_subject/compile-link-load.html)
+* [ELF文件格式分析](https://download.csdn.net/download/jiangwei0910410003/9204051)
+* [ELF文件格式总结](https://blog.csdn.net/flydream0/article/details/8719036)
+
